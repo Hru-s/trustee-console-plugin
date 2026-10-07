@@ -103,6 +103,7 @@
   "Do this from the Confidential Containers plugin on the workload cluster.": "Do this from the Confidential Containers plugin on the workload cluster.",
   "Done": "Done",
   "Download pod YAML": "Download pod YAML",
+  "Edit": "Edit",
   "Egress required": "Egress required",
   "Enable GPU attestation": "Enable GPU attestation",
   "Enforce TLS on KBS": "Enforce TLS on KBS",
