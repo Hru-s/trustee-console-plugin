@@ -186,8 +186,8 @@ const ProbeDetail: FC<{
   });
   const probeEvents = useMemo(() => scanEvents(events ?? []), [events]);
   const blocking = hasBlockingEvent(probeEvents);
-  const checks = buildChecks(w, ctx);
-  const rems = remediation(w, ctx, blocking, links);
+  const checks = buildChecks(w, ctx, t);
+  const rems = remediation(w, ctx, blocking, links, probeEvents, t);
 
   const decoded = decodeJwt(evidence?.token);
   return (
@@ -619,7 +619,7 @@ const TrusteeAttestation: FC = () => {
                             )}
                           </Td>
                           <Td dataLabel={t('Verdict')}>
-                            <Label color={verdictColor(verdict)}>{verdictLabel(verdict)}</Label>
+                            <Label color={verdictColor(verdict)}>{verdictLabel(verdict, t)}</Label>
                           </Td>
                           <Td dataLabel={t('Evidence')}>
                             {ev ? (
