@@ -73,6 +73,8 @@ import {
   kbsConfigEnableTls,
   kbsTlsModeFromToml,
 } from '../../utils/kbsUrl';
+import { useCanPatchConfigMap } from '../../utils/rbac/useTrusteePermissions';
+import PermissionHint from '../../utils/rbac/PermissionHint';
 import type { TrusteeTabProps } from './types';
 import '../trustee.css';
 
@@ -101,6 +103,10 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
   const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
   const name = obj?.metadata?.name;
   const namespace = obj?.metadata?.namespace ?? '';
+  const { allowed: canPatchCm, loading: rbacLoading } = useCanPatchConfigMap(
+    name ? `${name}${RVPS_REFERENCE_VALUES_SUFFIX}` : undefined,
+    namespace,
+  );
   const httpsSecretName = obj?.spec?.httpsSpec?.tlsSecretName;
 
   // --- KBS scheme: read the operator-rendered kbs-config.toml ---
@@ -760,8 +766,13 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                       </HelperText>
                     </FormHelperText>
                   </FormGroup>
+                  <PermissionHint allowed={canPatchCm} loading={rbacLoading} />
                   <div className={`${PREFIX}__mt ${PREFIX}__mb`}>
-                    <Button variant="primary" onClick={() => void addToReferenceValues()}>
+                    <Button
+                      variant="primary"
+                      onClick={() => void addToReferenceValues()}
+                      isDisabled={rbacLoading || !canPatchCm}
+                    >
                       {t('Add to reference values')}
                     </Button>{' '}
                     {rvStatus === 'ok' && (
@@ -821,7 +832,11 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                       </Button>
                     </SplitItem>
                     <SplitItem>
-                      <Button variant="secondary" onClick={() => void shareToConfigMap()}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => void shareToConfigMap()}
+                        isDisabled={rbacLoading || !canPatchCm}
+                      >
                         {t('Save to cluster (ConfigMap)')}
                       </Button>
                     </SplitItem>
