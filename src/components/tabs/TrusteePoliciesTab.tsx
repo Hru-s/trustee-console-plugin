@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Content, Gallery, PageSection } from '@patternfly/react-core';
 import ConfigMapEditor from '../shared/ConfigMapEditor';
 import { regoTemplatesForPolicy, validateRego } from '../../utils/rego';
+import { useCanPatchConfigMap } from '../../utils/rbac/useTrusteePermissions';
 import type { TrusteeTabProps } from './types';
 import '../trustee.css';
 
@@ -11,6 +12,10 @@ const TrusteePoliciesTab: FC<TrusteeTabProps> = ({ obj }) => {
   const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
   const name = obj?.metadata?.name;
   const namespace = obj?.metadata?.namespace ?? '';
+  const { allowed: canPatch, loading: rbacLoading } = useCanPatchConfigMap(
+    name ? `${name}-attestation-policy-cpu` : undefined,
+    namespace,
+  );
 
   if (!name) {
     return (
@@ -66,6 +71,7 @@ const TrusteePoliciesTab: FC<TrusteeTabProps> = ({ obj }) => {
             preferredKey="policy.rego"
             templates={regoTemplatesForPolicy(p.suffix)}
             validate={validateRego}
+            editable={!rbacLoading && canPatch}
           />
         ))}
       </Gallery>

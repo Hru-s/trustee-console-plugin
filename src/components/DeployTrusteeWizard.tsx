@@ -68,6 +68,8 @@ import {
   type SetupStepState,
 } from '../utils/setupChecklist';
 import GenerateTlsSecretModal from './GenerateTlsSecretModal';
+import { useTrusteePermissions } from '../utils/rbac/useTrusteePermissions';
+import PermissionHint from '../utils/rbac/PermissionHint';
 import './trustee.css';
 
 type ProfileType = 'Permissive' | 'Restricted';
@@ -388,6 +390,7 @@ const DeployTrusteeWizard: FC = () => {
     return linkButton(label, `/k8s/ns/${tcNs}/${TrusteeConfigModelRef}/${tcName}/${tab}`);
   };
 
+  const { canCreateTrusteeConfig, isLoading: rbacLoading } = useTrusteePermissions();
   const [name, setName] = useState('trustee-config');
   const [namespace, setNamespace] = useState(TRUSTEE_NAMESPACE);
   const [profileType, setProfileType] = useState<ProfileType>('Permissive');
@@ -847,6 +850,7 @@ const DeployTrusteeWizard: FC = () => {
                     </FormHelperText>
                   </FormGroup>
 
+                  <PermissionHint allowed={canCreateTrusteeConfig} loading={rbacLoading} />
                   {error && (
                     <Alert variant="danger" isInline title={t('Could not create TrusteeConfig')}>
                       {error}
@@ -892,7 +896,9 @@ const DeployTrusteeWizard: FC = () => {
                           variant="primary"
                           onClick={() => void create()}
                           isLoading={busy}
-                          isDisabled={busy || !valid || nameExists}
+                          isDisabled={
+                            busy || !valid || nameExists || rbacLoading || !canCreateTrusteeConfig
+                          }
                         >
                           {t('Create')}
                         </Button>
