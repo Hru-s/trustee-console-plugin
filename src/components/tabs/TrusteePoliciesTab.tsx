@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Content, Gallery, PageSection } from '@patternfly/react-core';
 import ConfigMapEditor from '../shared/ConfigMapEditor';
-import { regoTemplatesForPolicy, validateRego } from '../../utils/rego';
+import { regoTemplatesForPolicy, validateRego, regoWarning } from '../../utils/rego';
 import { useCanPatchConfigMap } from '../../utils/rbac/useTrusteePermissions';
 import type { TrusteeTabProps } from './types';
 import '../trustee.css';
@@ -71,6 +71,7 @@ const TrusteePoliciesTab: FC<TrusteeTabProps> = ({ obj }) => {
             preferredKey="policy.rego"
             templates={regoTemplatesForPolicy(p.suffix)}
             validate={validateRego}
+            warn={regoWarning}
             editable={!rbacLoading && canPatch}
           />
         ))}
