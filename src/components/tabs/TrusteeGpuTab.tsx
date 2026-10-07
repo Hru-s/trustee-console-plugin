@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ResourceLink, useK8sWatchResource } from '@openshift-console/dynamic-plugin-sdk';
 import { Link } from 'react-router';
 import {
   Alert,
+  Button,
   Card,
   CardBody,
   CardTitle,
@@ -19,6 +21,8 @@ import {
 import { CheckCircleIcon } from '@patternfly/react-icons';
 import { ConfigMapGVK, TrusteeConfigModelRef } from '../../k8s/resources';
 import type { ConfigMapKind } from '../../k8s/types';
+import { useCanCreateSecret } from '../../utils/rbac/useTrusteePermissions';
+import CreatePccsSecretModal from '../CreatePccsSecretModal';
 import type { TrusteeTabProps } from './types';
 import '../trustee.css';
 
@@ -33,6 +37,9 @@ const TrusteeGpuTab: FC<TrusteeTabProps> = ({ obj }) => {
   const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
   const name = obj?.metadata?.name;
   const namespace = obj?.metadata?.namespace ?? '';
+  const { allowed: canCreateSec, loading: rbacLoading } = useCanCreateSecret(namespace);
+  const [pccsModalOpen, setPccsModalOpen] = useState(false);
+  const [pccsCreated, setPccsCreated] = useState('');
 
   const [cm, loaded, loadError] = useK8sWatchResource<ConfigMapKind>({
     groupVersionKind: ConfigMapGVK,
@@ -43,11 +50,13 @@ const TrusteeGpuTab: FC<TrusteeTabProps> = ({ obj }) => {
   // `loaded`, which would otherwise hang on "Loading…" forever.
   const settled = loaded || Boolean(loadError);
 
-  const cfgText = Object.values(cm?.data ?? {}).join('\n');
+  const cfgKey = Object.keys(cm?.data ?? {}).find((k) => k.endsWith('.toml')) ?? 'kbs-config.toml';
+  const cfgText = cm?.data?.[cfgKey] ?? '';
   const hasNvidia = /nvidia_verifier/i.test(cfgText);
   const remoteMode = /type\s*=\s*"?Remote"?/i.test(cfgText);
   const urlMatch = /verifier_url\s*=\s*"([^"]+)"/i.exec(cfgText);
   const verifierUrl = urlMatch?.[1] ?? DEFAULT_NRAS_URL;
+
 
   const testCmd = `oc exec -n ${namespace || '<namespace>'} deployment/trustee-deployment -- curl -I https://nras.attestation.nvidia.com`;
 
@@ -174,6 +183,23 @@ const TrusteeGpuTab: FC<TrusteeTabProps> = ({ obj }) => {
                 {t('Intel Trusted Services API portal')}
               </a>
               {t(' to verify the CPU TEE that hosts the confidential GPU.')}
+              <div className="trustee-openshift-console-plugin__mt">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setPccsModalOpen(true);
+                  }}
+                  isDisabled={rbacLoading || !canCreateSec}
+                >
+                  {t('Create PCCS API key secret')}
+                </Button>
+                {pccsCreated && (
+                  <span className="trustee-openshift-console-plugin__icon-success trustee-openshift-console-plugin__ml">
+                    {t('Created {{name}}', { name: pccsCreated })}
+                  </span>
+                )}
+              </div>
             </Content>
             <Content component="li">
               {t(
@@ -239,6 +265,18 @@ const TrusteeGpuTab: FC<TrusteeTabProps> = ({ obj }) => {
           </DescriptionList>
         </CardBody>
       </Card>
+      {pccsModalOpen && (
+        <CreatePccsSecretModal
+          namespace={namespace}
+          onCreated={(n) => {
+            setPccsCreated(n);
+            setPccsModalOpen(false);
+          }}
+          onClose={() => {
+            setPccsModalOpen(false);
+          }}
+        />
+      )}
     </PageSection>
   );
 };
