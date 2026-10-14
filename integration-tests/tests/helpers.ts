@@ -29,7 +29,30 @@ export async function waitForContent(
     patterns instanceof RegExp
       ? patterns
       : new RegExp(patterns.join('|'), 'i');
-  await expect(page.locator('body')).toContainText(regex, { timeout });
+  const main = page.locator('#content-scrollable, .pf-v6-c-page__main, main, #content').first();
+  await expect(async () => {
+    const mainText = (await main.innerText().catch(() => '')) || '';
+    const body = await page.locator('body').innerText();
+    const haystack = mainText.length > 40 ? mainText : body;
+    expect(haystack).toMatch(regex);
+    expect(haystack.length).toBeGreaterThan(80);
+  }).toPass({ timeout, intervals: [2_000] });
+}
+
+export async function navigateTo(page: Page, baseURL: string, path: string) {
+  await page.goto(`${baseURL}${path}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 120_000,
+  });
+  await waitForConsoleReady(page);
+}
+
+export async function mainText(page: Page): Promise<string> {
+  return page
+    .locator('#content-scrollable, .pf-v6-c-page__main, main, #content')
+    .first()
+    .innerText({ timeout: 10_000 })
+    .catch(() => '');
 }
 
 export async function assertNoReactErrors(page: Page) {

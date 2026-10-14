@@ -16,7 +16,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  timeout: 120_000,
+  timeout: 180_000,
   expect: { timeout: 30_000 },
 
   reporter: process.env.CI
@@ -31,7 +31,10 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     actionTimeout: 30_000,
-    navigationTimeout: 60_000,
+    navigationTimeout: 120_000,
+    ...(process.env.PROXY_SERVER
+      ? { proxy: { server: process.env.PROXY_SERVER } }
+      : {}),
   },
 
   projects: [
