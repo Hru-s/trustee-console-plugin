@@ -376,8 +376,10 @@ const DeployTrusteeWizard: FC = () => {
   );
 
   const actionFor = (step: SetupStep): ReactNode => {
-    // The final verify link is always available — it's just the attestation overview.
-    if (step.id === 'verify') return linkButton(META.verify.action ?? '', '/trustee');
+    // Only offer verify once required steps (incl. initdata) are satisfied.
+    if (step.id === 'verify') {
+      return verifyReady ? linkButton(META.verify.action ?? '', '/trustee') : undefined;
+    }
     // Open the created TrusteeConfig resource.
     if (step.id === 'trusteeconfig')
       return createdHref ? linkButton(t('Open TrusteeConfig'), createdHref) : undefined;

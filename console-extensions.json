@@ -147,6 +147,15 @@
     }
   },
   {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/trustee/verify/:ns/:name",
+      "component": { "$codeRef": "TrusteeVerifyRedirect" }
+    },
+    "flags": { "required": ["TRUSTEE_TRUSTEECONFIG"] }
+  },
+  {
     "type": "console.tab/horizontalNav",
     "properties": {
       "model": {

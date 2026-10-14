@@ -1,6 +1,6 @@
 import type { FC, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Fragment, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   DocumentTitle,
@@ -312,10 +312,14 @@ const ProbeDetail: FC<{
 
 const TrusteeAttestation: FC = () => {
   const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
+  const [searchParams] = useSearchParams();
   useTrusteeDefaultProject();
   // Best-effort: is the separate CoCo plugin installed (so its remediation routes
   // resolve)? Absent on a Trustee-only hub cluster ⇒ render those links as text.
   const cocoPresent = cocoRoutesPresent(useFlag(COCO_KATACONFIG_FLAG));
+  // From /trustee/verify/:ns/:name → ?namespace=&name= (auto-expand that row).
+  const focusNs = searchParams.get('namespace')?.trim() ?? '';
+  const focusName = searchParams.get('name')?.trim() ?? '';
 
   const [trusteeConfigs, tcLoaded] = useTrusteeConfigs();
   const [kbsConfigs] = useKbsConfigs();
@@ -400,13 +404,17 @@ const TrusteeAttestation: FC = () => {
     return c;
   }, [rows]);
 
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const focusUid = useMemo(() => {
+    if (!focusNs || !focusName) return undefined;
+    return workloads.find((w) => w.namespace === focusNs && w.name === focusName)?.uid;
+  }, [workloads, focusNs, focusName]);
+  // Per-row override; undefined means "use focus default" (open when uid === focusUid).
+  const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
+  const isExpanded = (id: string): boolean => expandedOverride[id] ?? id === focusUid;
   const toggle = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+    setExpandedOverride((prev) => {
+      const currentlyOpen = prev[id] ?? id === focusUid;
+      return { ...prev, [id]: !currentlyOpen };
     });
   };
   const [filter, setFilter] = useState<Verdict | 'all'>('all');
@@ -570,7 +578,7 @@ const TrusteeAttestation: FC = () => {
                 </Thead>
                 <Tbody>
                   {visibleRows.map(({ w, verdict }, rowIndex) => {
-                    const open = expanded.has(w.uid);
+                    const open = isExpanded(w.uid);
                     const ev = evidenceByKey.get(`${w.namespace}/${w.name}`);
                     return (
                       <Fragment key={w.uid}>
