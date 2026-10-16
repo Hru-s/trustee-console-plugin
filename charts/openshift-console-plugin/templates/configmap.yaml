@@ -19,6 +19,9 @@ data:
         listen              [::]:{{ .Values.plugin.port }} ssl;
         ssl_certificate     /var/cert/tls.crt;
         ssl_certificate_key /var/cert/tls.key;
+        ssl_protocols       {{ .Values.plugin.nginx.ssl_protocols }};
+        ssl_ciphers         {{ .Values.plugin.nginx.ssl_ciphers }};
+        ssl_prefer_server_ciphers {{ .Values.plugin.nginx.ssl_prefer_server_ciphers }};
         root                /usr/share/nginx/html;
       }
     }
