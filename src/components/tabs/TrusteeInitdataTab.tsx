@@ -73,7 +73,7 @@ import {
   kbsConfigEnableTls,
   kbsTlsModeFromToml,
 } from '../../utils/kbsUrl';
-import { useCanPatchConfigMap } from '../../utils/rbac/useTrusteePermissions';
+import { useCanPatchConfigMap, useCanWriteConfigMap } from '../../utils/rbac/useTrusteePermissions';
 import PermissionHint from '../../utils/rbac/PermissionHint';
 import type { TrusteeTabProps } from './types';
 import '../trustee.css';
@@ -105,6 +105,12 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
   const namespace = obj?.metadata?.namespace ?? '';
   const { allowed: canPatchCm, loading: rbacLoading } = useCanPatchConfigMap(
     name ? `${name}${RVPS_REFERENCE_VALUES_SUFFIX}` : undefined,
+    namespace,
+  );
+  // "Save to cluster" replaces the shared-initdata ConfigMap (delete + create), a
+  // different resource and verbs than the reference-values patch above.
+  const { allowed: canShareCm, loading: shareRbacLoading } = useCanWriteConfigMap(
+    name ? `${name}${SHARED_INITDATA_CM_SUFFIX}` : undefined,
     namespace,
   );
   const httpsSecretName = obj?.spec?.httpsSpec?.tlsSecretName;
@@ -835,7 +841,7 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                       <Button
                         variant="secondary"
                         onClick={() => void shareToConfigMap()}
-                        isDisabled={rbacLoading || !canPatchCm}
+                        isDisabled={shareRbacLoading || !canShareCm}
                       >
                         {t('Save to cluster (ConfigMap)')}
                       </Button>

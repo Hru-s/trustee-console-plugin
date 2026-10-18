@@ -9,13 +9,11 @@ setup('authenticate as kubeadmin', async ({ page, baseURL }) => {
     throw new Error('BRIDGE_KUBEADMIN_PASSWORD is required');
   }
 
-  const oauthBase = baseURL!
-    .replace('console-openshift-console', 'oauth-openshift');
-  const authURL =
-    `${oauthBase}/oauth/authorize?client_id=console&redirect_uri=` +
-    `${encodeURIComponent(baseURL + '/auth/callback')}&response_type=code`;
-
-  await page.goto(authURL, { waitUntil: 'load' });
+  // Start at the Console login entrypoint rather than hand-building the OAuth
+  // authorize URL: the Console sets the `state` query param and the `login-state`
+  // cookie here, and its /auth/callback rejects requests that lack them (routing
+  // to /auth/error). Driving the real entrypoint lets the full OAuth flow complete.
+  await page.goto(`${baseURL}/auth/login`, { waitUntil: 'load' });
 
   const kubeLink = page.locator('a', { hasText: 'kube:admin' }).first();
   if (await kubeLink.isVisible({ timeout: 10_000 }).catch(() => false)) {
@@ -29,6 +27,10 @@ setup('authenticate as kubeadmin', async ({ page, baseURL }) => {
   await page.waitForURL((url) => !url.pathname.includes('/login'), {
     timeout: 60_000,
   });
+
+  // A missing/invalid state cookie lands the callback on /auth/error; fail loudly
+  // instead of saving an unauthenticated storage state.
+  expect(page.url(), 'authentication landed on /auth/error').not.toContain('/auth/error');
 
   await page.goto(baseURL!, { waitUntil: 'load' });
 

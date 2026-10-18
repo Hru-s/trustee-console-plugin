@@ -21,9 +21,11 @@ test.describe('C-35 Verify attestation redirect', () => {
         !u.pathname.includes('/trustee/verify/'),
       { timeout: 60_000 },
     );
-    const url = page.url();
-    expect(url).toMatch(/[?&]namespace=/);
-    expect(url).toMatch(/[?&]name=/);
+    // Assert the redirect carried the requested workload identity, not just that
+    // the params exist — empty/wrong values would still satisfy a presence check.
+    const params = new URL(page.url()).searchParams;
+    expect(params.get('namespace')).toBe(ns);
+    expect(params.get('name')).toBe(name);
     await waitForContent(page, /attestation|trustee|confidential|workload|reference/i, 120_000);
     await assertNoReactErrors(page);
   });
