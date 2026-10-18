@@ -392,9 +392,11 @@ const DeployTrusteeWizard: FC = () => {
     return linkButton(label, `/k8s/ns/${tcNs}/${TrusteeConfigModelRef}/${tcName}/${tab}`);
   };
 
-  const { canCreateTrusteeConfig, isLoading: rbacLoading } = useTrusteePermissions();
   const [name, setName] = useState('trustee-config');
   const [namespace, setNamespace] = useState(TRUSTEE_NAMESPACE);
+  // Scope the create review to the namespace the wizard will create the TrusteeConfig in,
+  // so a namespace-scoped RoleBinding grant isn't mistaken for "unauthorized".
+  const { canCreateTrusteeConfig, isLoading: rbacLoading } = useTrusteePermissions(namespace);
   const [profileType, setProfileType] = useState<ProfileType>('Permissive');
   const [serviceType, setServiceType] = useState<ServiceType>('ClusterIP');
   const [httpsSecret, setHttpsSecret] = useState('');
