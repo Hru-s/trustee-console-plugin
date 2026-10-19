@@ -32,11 +32,14 @@ export const useCanPatchConfigMap = (name?: string, namespace?: string) => {
  * it, where `patch` permission alone would misgate create/delete-only grants.
  */
 export const useCanWriteConfigMap = (name?: string, namespace?: string) => {
+  // A create is a POST to the collection, whose authorization attributes carry no
+  // resource name — so the create review must omit `name`, or a `resourceNames`-
+  // restricted rule would answer a question the real request never asks. The delete
+  // acts on the named object, so it keeps `name`.
   const [canCreate, loadingCreate] = useAccessReview({
     group: '',
     resource: 'configmaps',
     namespace: namespace || TRUSTEE_NAMESPACE,
-    name,
     verb: 'create',
   });
   const [canDelete, loadingDelete] = useAccessReview({
