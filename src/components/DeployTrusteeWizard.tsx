@@ -185,6 +185,97 @@ const TrusteeOperatorInstall: FC = () => {
   );
 };
 
+/**
+ * Create footer gated on create permission for the target namespace.
+ *
+ * The SDK's `useAccessReview` does not reset its `allowed`/`loading` state when the
+ * reviewed namespace changes — it keeps serving the previous answer until the new
+ * request resolves. Switching from a namespace the user can create in to one they
+ * cannot would otherwise briefly leave Create enabled against the stale result. We
+ * isolate the review here and remount this component via `key={namespace}` in the
+ * parent, so a namespace change resets the review to loading and re-evaluates.
+ */
+const CreateTrusteeConfigFooter: FC<{
+  namespace: string;
+  name: string;
+  error?: string;
+  nameExists: boolean;
+  createdRef?: { name: string; namespace: string };
+  busy: boolean;
+  createDisabled: boolean;
+  onCreate: () => void;
+}> = ({ namespace, name, error, nameExists, createdRef, busy, createDisabled, onCreate }) => {
+  const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
+  const navigate = useNavigate();
+  const { canCreateTrusteeConfig, isLoading: rbacLoading } = useTrusteePermissions(namespace);
+
+  return (
+    <>
+      <PermissionHint allowed={canCreateTrusteeConfig} loading={rbacLoading} />
+      {error && (
+        <Alert variant="danger" isInline title={t('Could not create TrusteeConfig')}>
+          {error}
+        </Alert>
+      )}
+      {!createdRef && nameExists && (
+        <Alert
+          variant="warning"
+          isInline
+          isPlain
+          title={t(
+            'A TrusteeConfig named {{name}} already exists in {{ns}} — rename to create another.',
+            { name, ns: namespace },
+          )}
+        />
+      )}
+
+      <ActionGroup>
+        {createdRef ? (
+          <>
+            <Button
+              variant="primary"
+              onClick={() => {
+                void navigate(
+                  `/k8s/ns/${createdRef.namespace}/${TrusteeConfigModelRef}/${createdRef.name}`,
+                );
+              }}
+            >
+              {t('Open TrusteeConfig')}
+            </Button>
+            <Button
+              variant="link"
+              onClick={() => {
+                void navigate('/trustee');
+              }}
+            >
+              {t('Go to attestation overview')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="primary"
+              onClick={onCreate}
+              isLoading={busy}
+              isDisabled={createDisabled || rbacLoading || !canCreateTrusteeConfig}
+            >
+              {t('Create')}
+            </Button>
+            <Button
+              variant="link"
+              onClick={() => {
+                void navigate('/trustee');
+              }}
+            >
+              {t('Cancel')}
+            </Button>
+          </>
+        )}
+      </ActionGroup>
+    </>
+  );
+};
+
 const DeployTrusteeWizard: FC = () => {
   const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
   const navigate = useNavigate();
@@ -394,9 +485,6 @@ const DeployTrusteeWizard: FC = () => {
 
   const [name, setName] = useState('trustee-config');
   const [namespace, setNamespace] = useState(TRUSTEE_NAMESPACE);
-  // Scope the create review to the namespace the wizard will create the TrusteeConfig in,
-  // so a namespace-scoped RoleBinding grant isn't mistaken for "unauthorized".
-  const { canCreateTrusteeConfig, isLoading: rbacLoading } = useTrusteePermissions(namespace);
   const [profileType, setProfileType] = useState<ProfileType>('Permissive');
   const [serviceType, setServiceType] = useState<ServiceType>('ClusterIP');
   const [httpsSecret, setHttpsSecret] = useState('');
@@ -854,69 +942,22 @@ const DeployTrusteeWizard: FC = () => {
                     </FormHelperText>
                   </FormGroup>
 
-                  <PermissionHint allowed={canCreateTrusteeConfig} loading={rbacLoading} />
-                  {error && (
-                    <Alert variant="danger" isInline title={t('Could not create TrusteeConfig')}>
-                      {error}
-                    </Alert>
-                  )}
-                  {!createdRef && nameExists && (
-                    <Alert
-                      variant="warning"
-                      isInline
-                      isPlain
-                      title={t(
-                        'A TrusteeConfig named {{name}} already exists in {{ns}} — rename to create another.',
-                        { name: name.trim(), ns: namespace.trim() },
-                      )}
-                    />
-                  )}
-
-                  <ActionGroup>
-                    {createdRef ? (
-                      <>
-                        <Button
-                          variant="primary"
-                          onClick={() => {
-                            void navigate(
-                              `/k8s/ns/${createdRef.namespace}/${TrusteeConfigModelRef}/${createdRef.name}`,
-                            );
-                          }}
-                        >
-                          {t('Open TrusteeConfig')}
-                        </Button>
-                        <Button
-                          variant="link"
-                          onClick={() => {
-                            void navigate('/trustee');
-                          }}
-                        >
-                          {t('Go to attestation overview')}
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="primary"
-                          onClick={() => void create()}
-                          isLoading={busy}
-                          isDisabled={
-                            busy || !valid || nameExists || rbacLoading || !canCreateTrusteeConfig
-                          }
-                        >
-                          {t('Create')}
-                        </Button>
-                        <Button
-                          variant="link"
-                          onClick={() => {
-                            void navigate('/trustee');
-                          }}
-                        >
-                          {t('Cancel')}
-                        </Button>
-                      </>
-                    )}
-                  </ActionGroup>
+                  {/*
+                    Keyed on the normalized target namespace so a namespace change
+                    remounts the create-permission review instead of reusing the SDK
+                    hook's stale previous-namespace answer.
+                  */}
+                  <CreateTrusteeConfigFooter
+                    key={namespace.trim()}
+                    namespace={namespace.trim()}
+                    name={name.trim()}
+                    error={error}
+                    nameExists={nameExists}
+                    createdRef={createdRef}
+                    busy={busy}
+                    createDisabled={busy || !valid || nameExists}
+                    onCreate={() => void create()}
+                  />
                 </Form>
               </CardBody>
             </Card>
