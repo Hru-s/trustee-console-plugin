@@ -45,7 +45,7 @@
       "id": "trustee",
       "perspective": "admin",
       "name": "%plugin__trustee-openshift-console-plugin~Confidential Attestation%",
-      "insertAfter": "confidential-containers"
+      "insertAfter": "workloads"
     }
   },
   {
