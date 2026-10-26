@@ -10,7 +10,7 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "main"
   labels:
-    appstudio.openshift.io/application: trustee
+    appstudio.openshift.io/application: console-plugins
     appstudio.openshift.io/component: trustee-console-plugin
     pipelines.appstudio.openshift.io/type: build
   name: trustee-console-plugin-on-push
