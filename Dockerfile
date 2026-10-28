@@ -7,7 +7,7 @@ COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn .yarn
 RUN LOCAL_YARN="node $(awk '/yarnPath:/{print $2}' .yarnrc.yml)" && \
     $LOCAL_YARN install --immutable
-COPY console-extensions.json LICENSE tsconfig.json webpack.config.ts ./
+COPY console-extensions.json LICENSE tsconfig.json webpack.config.ts .swcrc ./
 COPY locales ./locales
 COPY src ./src
 RUN LOCAL_YARN="node $(awk '/yarnPath:/{print $2}' .yarnrc.yml)" && \
