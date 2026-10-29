@@ -43,6 +43,7 @@ import {
 } from '../k8s/resources';
 import type { ConfigMapKind, JobKind, SecretKind } from '../k8s/types';
 import { jobFailed, jobFailureMessage } from '../utils/job';
+import { buildVeritasScript } from '../utils/veritas';
 import { useCanCreateJob } from '../utils/rbac/useTrusteePermissions';
 import PermissionHint from '../utils/rbac/PermissionHint';
 import './trustee.css';
@@ -65,51 +66,6 @@ const isAlreadyExists = (e: unknown): boolean => {
 const isNotFound = (e: unknown): boolean => {
   const msg = e instanceof Error ? e.message : String(e);
   return /not found|notfound|404/i.test(msg);
-};
-
-/**
- * Build the bash `-c` script the veritas Job runs. It generates RVPS reference
- * values for the given TEE/OCP version, extracts reference-values.json from
- * veritas's own ConfigMap manifest, and merge-patches it into the
- * operator-generated `<name>-rvps-reference-values` ConfigMap.
- */
-const buildScript = (opts: {
-  tee: 'tdx' | 'snp';
-  ocpVersion: string;
-  gpu: boolean;
-  xfamFeatures: string[];
-  rvpsConfigMap: string;
-  namespace: string;
-  hasInitdata: boolean;
-}): string => {
-  const { tee, ocpVersion, gpu, xfamFeatures, rvpsConfigMap, namespace, hasInitdata } = opts;
-  const gpuFlag = gpu ? '--gpu' : '';
-  const xfamFlags = xfamFeatures.map((f) => `--hw-xfam-allow ${f}`).join(' ');
-  // Collapse any accidental double spaces from empty flags so the command line is clean.
-  const veritasCmd = [
-    'veritas --platform baremetal',
-    `--tee ${tee}`,
-    `--ocp-version ${ocpVersion}`,
-    hasInitdata ? '--initdata /initdata/initdata.toml' : '',
-    '--authfile /auth/.dockerconfigjson',
-    gpuFlag,
-    xfamFlags,
-    '-o /tmp/out',
-  ]
-    .filter((s) => s.length > 0)
-    .join(' ');
-
-  return [
-    'set -e',
-    'mkdir -p /tmp/out',
-    veritasCmd,
-    // Render veritas's manifest client-side and pull out just reference-values.json.
-    // The \\. keeps jsonpath treating "reference-values.json" as one literal key.
-    `oc create -f /tmp/out/rvps-reference-values.yaml --dry-run=client -o 'jsonpath={.data.reference-values\\.json}' > /tmp/rv.json`,
-    // Merge-patch the operator CM so we replace only the one key (keep other data).
-    `oc patch configmap ${rvpsConfigMap} -n ${namespace} --type merge -p "$(python3 -c 'import json; print(json.dumps({"data": {"reference-values.json": open("/tmp/rv.json").read()}}))')"`,
-    `echo "PATCHED ${rvpsConfigMap}"`,
-  ].join('\n');
 };
 
 /**
@@ -301,7 +257,7 @@ const GenerateReferenceValuesModal: FC<Props> = ({
       }
 
       // e. Delete any prior Job (Jobs are immutable), then create a fresh one.
-      const script = buildScript({
+      const script = buildVeritasScript({
         tee,
         ocpVersion: ocpVersion.trim(),
         gpu,
