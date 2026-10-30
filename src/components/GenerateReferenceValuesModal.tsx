@@ -152,10 +152,10 @@ const GenerateReferenceValuesModal: FC<Props> = ({
       } catch (e) {
         throw new Error(
           t(
-            'Could not read the cluster pull secret ({{name}} in {{ns}}). veritas needs it to pull the OpenShift release image. This requires cluster-admin, or provide a pull secret in this namespace. ({{detail}})',
+            'Could not read the cluster pull secret ({{name}} in {{nsName}}). veritas needs it to pull the OpenShift release image. This requires cluster-admin, or provide a pull secret in this namespace. ({{detail}})',
             {
               name: CLUSTER_PULL_SECRET.name,
-              ns: CLUSTER_PULL_SECRET.namespace,
+              nsName: CLUSTER_PULL_SECRET.namespace,
               detail: e instanceof Error ? e.message : String(e),
             },
           ),
@@ -351,10 +351,10 @@ const GenerateReferenceValuesModal: FC<Props> = ({
             >
               <Content component="p" className="trustee-openshift-console-plugin__mb">
                 {t(
-                  'veritas needs to read {{name}} in {{ns}} to pull the OpenShift release image, but it is not readable here (this usually needs cluster-admin). Copy it into {{target}} first, then generate:',
+                  'veritas needs to read {{name}} in {{nsName}} to pull the OpenShift release image, but it is not readable here (this usually needs cluster-admin). Copy it into {{target}} first, then generate:',
                   {
                     name: CLUSTER_PULL_SECRET.name,
-                    ns: CLUSTER_PULL_SECRET.namespace,
+                    nsName: CLUSTER_PULL_SECRET.namespace,
                     target: namespace,
                   },
                 )}
@@ -487,8 +487,8 @@ const GenerateReferenceValuesModal: FC<Props> = ({
                     className="trustee-openshift-console-plugin__mt trustee-openshift-console-plugin__mb"
                   >
                     {t(
-                      'If the pod logs show a pull-secret / unauthorized error, copy the cluster pull secret into {{ns}} and retry:',
-                      { ns: namespace },
+                      'If the pod logs show a pull-secret / unauthorized error, copy the cluster pull secret into {{nsName}} and retry:',
+                      { nsName: namespace },
                     )}
                   </Content>
                   <ClipboardCopy isReadOnly isCode hoverTip={t('Copy')} clickTip={t('Copied')}>

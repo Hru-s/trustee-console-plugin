@@ -224,8 +224,8 @@ const CreateTrusteeConfigFooter: FC<{
           isInline
           isPlain
           title={t(
-            'A TrusteeConfig named {{name}} already exists in {{ns}} — rename to create another.',
-            { name, ns: namespace },
+            'A TrusteeConfig named {{name}} already exists in {{nsName}} — rename to create another.',
+            { name, nsName: namespace },
           )}
         />
       )}
