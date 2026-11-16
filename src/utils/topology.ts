@@ -98,6 +98,49 @@ export const detectClusterTee = (nodes: NodeKind[]): 'tdx' | 'snp' | null => {
   return null;
 };
 
+// NFD's cpuid feature-source label prefix: feature.node.kubernetes.io/cpu-cpuid.<FLAG>.
+const NFD_CPUID_PREFIX = 'feature.node.kubernetes.io/cpu-cpuid.';
+
+/**
+ * Default TEE XFAM features for the reference-value generator, derived from the
+ * first node that publishes NFD cpuid labels. veritas's XFAM feature names do
+ * not map 1:1 to cpuid flag names (avx512 = the three AVX-512 XCR0 bits, amx =
+ * the two XTILE bits, pkru = the PKU state bit), so map by family; x87/sse/avx
+ * are baseline on any TDX-capable x86. A wrong XFAM makes the generated
+ * reference values mismatch the hardware's actual attributes — the policy's
+ * xfam check then denies every attestation. Returns undefined when no node
+ * publishes cpuid labels (NFD absent or a non-x86 cluster) so callers fall
+ * back to their own conservative default.
+ *
+ * Two live-verified NFD quirks (Sapphire Rapids TDX node, OCP 4.22):
+ * - NFD strips the underscores /proc/cpuinfo uses: `amx_tile` is published as
+ *   `AMXTILE` (also AMXINT8/AMXBF16/AMXFP8). Both spellings are accepted.
+ * - NFD publishes no PKU/OSPKE label at all — even on hardware whose
+ *   /proc/cpuinfo has pku/ospke. Every TDX-capable platform with AVX-512
+ *   (Ice Lake-SP and newer) also carries PKU in XCR0, so pkru is inferred
+ *   from AVX512F when the explicit label is missing; omitting it silently
+ *   denies every attestation on current TDX hardware.
+ */
+export const detectNodeXfam = (nodes: NodeKind[]): string | undefined => {
+  for (const node of nodes) {
+    const flags = Object.keys(node?.metadata?.labels ?? {})
+      .filter((l) => l.startsWith(NFD_CPUID_PREFIX))
+      .map((l) => l.slice(NFD_CPUID_PREFIX.length));
+    if (flags.length === 0) continue;
+
+    const has = (...names: string[]): boolean => names.some((n) => flags.includes(n));
+    const features = ['x87', 'sse', 'avx'];
+    const avx512 = has('AVX512F');
+    if (avx512) features.push('avx512');
+    if (has('PKU', 'OSPKE') || avx512) features.push('pkru');
+    if (has('AMXTILE', 'AMX_TILE', 'AMXINT8', 'AMX_INT8', 'AMXBF16', 'AMX_BF16', 'AMXFP8')) {
+      features.push('amx');
+    }
+    return features.join(',');
+  }
+  return undefined;
+};
+
 export const teeShort = (tee: TeeType): string =>
   tee === 'tdx' ? 'TDX' : tee === 'snp' ? 'SEV-SNP' : '';
 
