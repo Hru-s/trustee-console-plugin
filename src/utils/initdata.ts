@@ -129,13 +129,34 @@ export const POLICY_DEFAULTS: readonly (readonly [string, boolean])[] = [
 export type SensitiveRequest = string;
 
 /**
- * The one policy toggle we surface in the UI. The doc-critical control is disabling
- * `ExecProcessRequest` (no `oc exec` into the confidential VM). Everything else keeps its
- * secure POLICY_DEFAULTS value; in particular PullImageRequest stays true (disabling it
- * breaks the container) and Set/WriteStream stay false — so we don't expose footgun toggles
- * that only invite reference-value mismatches.
+ * The policy toggles we surface in the UI. The doc-critical control is disabling
+ * `ExecProcessRequest` (no `oc exec` into the confidential VM). `WriteStreamRequest`
+ * is surfaced because it rides along with exec — see {@link applyRequestToggle}.
+ * Everything else keeps its secure POLICY_DEFAULTS value; in particular
+ * PullImageRequest stays true (disabling it breaks the container) and
+ * SetPolicyRequest stays false — we don't expose footgun toggles that only invite
+ * reference-value mismatches.
  */
-export const SENSITIVE_REQUESTS = ['ExecProcessRequest'] as const;
+export const SENSITIVE_REQUESTS = ['ExecProcessRequest', 'WriteStreamRequest'] as const;
+
+/**
+ * Apply a Kata-agent policy toggle with the one coupling the UI exposes: allowing
+ * `ExecProcessRequest` also allows `WriteStreamRequest`, because exec is how users
+ * inspect the fetched secret inside the confidential VM (`oc exec … cat …`) and its
+ * output reaches them only through the stream write. Unchecking exec leaves the
+ * follower exactly as the user set it.
+ */
+export const applyRequestToggle = (
+  current: Record<SensitiveRequest, boolean>,
+  req: SensitiveRequest,
+  checked: boolean,
+): Record<SensitiveRequest, boolean> => {
+  const next = { ...current, [req]: checked };
+  if (req === 'ExecProcessRequest' && checked) {
+    next.WriteStreamRequest = true;
+  }
+  return next;
+};
 
 export interface InitdataInput {
   trusteeUrl: string;
@@ -333,7 +354,12 @@ export const buildWorkloadPodYaml = (input: WorkloadPodYamlInput): string => {
         ]
       : []),
     '#',
-    '# Put the annotation below on your confidential Pod, then deploy it.',
+    '# Example confidential Pod carrying this initdata. Replace the pod name,',
+    '# image, and command with your workload — but keep the annotation and',
+    '# runtimeClassName exactly as they are (the annotation must match the',
+    '# generated initdata byte for byte, or attestation will not recognize the',
+    '# pod). Then apply it with:',
+    '#   oc apply -f <this-file>.yaml',
     'apiVersion: v1',
     'kind: Pod',
     'metadata:',
@@ -343,8 +369,10 @@ export const buildWorkloadPodYaml = (input: WorkloadPodYamlInput): string => {
     'spec:',
     `  runtimeClassName: ${meta.runtimeClass}`,
     '  containers:',
+    '    # Simple example container — replace with your workload.',
     '    - name: app',
-    '      image: <your-image>',
+    '      image: quay.io/kata-containers/alpine-bash-curl:latest',
+    "      command: ['sh', '-c', 'echo confidential workload started; sleep infinity']",
     '',
   ].join('\n');
 };

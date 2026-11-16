@@ -19,6 +19,7 @@ import {
   Checkbox,
   ClipboardCopy,
   Content,
+  ExpandableSection,
   Form,
   FormGroup,
   FormHelperText,
@@ -55,6 +56,7 @@ import {
 } from '../../k8s/resources';
 import type { ConfigMapKind, DeploymentKind, RouteKind, SecretKind } from '../../k8s/types';
 import {
+  applyRequestToggle,
   buildInitdata,
   buildWorkloadPodYaml,
   MEASUREMENT_PLATFORMS,
@@ -232,6 +234,9 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
 
   const requestHelp: Record<SensitiveRequest, string> = {
     ExecProcessRequest: t('Allow oc/kubectl exec into the confidential VM (recommended off).'),
+    WriteStreamRequest: t(
+      'Shows exec output from the confidential VM — e.g. the fetched secret printed with oc exec. Turned on automatically when exec is allowed.',
+    ),
   };
 
   const generate = async () => {
@@ -434,16 +439,22 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
     }
   };
 
+  // The example Pod offered for download and inline preview — derived from the
+  // same result as the annotation and measurement shown above, so all three
+  // always agree.
+  const podYaml = result
+    ? buildWorkloadPodYaml({
+        source: name,
+        kbsUrl: trusteeUrl.trim(),
+        measurement: result.measurement,
+        platform: result.platform,
+        annotation: result.annotation,
+      })
+    : undefined;
+
   const download = () => {
-    if (!result) return;
-    const content = buildWorkloadPodYaml({
-      source: name,
-      kbsUrl: trusteeUrl.trim(),
-      measurement: result.measurement,
-      platform: result.platform,
-      annotation: result.annotation,
-    });
-    const url = URL.createObjectURL(new Blob([content], { type: 'application/yaml' }));
+    if (!podYaml) return;
+    const url = URL.createObjectURL(new Blob([podYaml], { type: 'application/yaml' }));
     const a = document.createElement('a');
     a.href = url;
     a.download = `initdata-${name}.yaml`;
@@ -714,7 +725,7 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                       description={requestHelp[req]}
                       isChecked={allow[req]}
                       onChange={(_e, checked) => {
-                        setAllow((prev) => ({ ...prev, [req]: checked }));
+                        setAllow((prev) => applyRequestToggle(prev, req, checked));
                       }}
                       className={`${PREFIX}__mb`}
                     />
@@ -864,6 +875,22 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                       </Button>
                     </SplitItem>
                   </Split>
+                  {podYaml && (
+                    <ExpandableSection
+                      toggleText={t('Preview pod YAML')}
+                      className={`${PREFIX}__mt`}
+                    >
+                      <ClipboardCopy
+                        isReadOnly
+                        isCode
+                        variant="expansion"
+                        hoverTip={t('Copy')}
+                        clickTip={t('Copied')}
+                      >
+                        {podYaml}
+                      </ClipboardCopy>
+                    </ExpandableSection>
+                  )}
                   {shareStatus === 'ok' && (
                     <div className={`${PREFIX}__mt`}>
                       <ResourceLink

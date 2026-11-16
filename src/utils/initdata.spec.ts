@@ -7,6 +7,8 @@
  * no DOM needed.
  */
 import {
+  applyRequestToggle,
+  buildInitdata,
   buildInitdataToml,
   buildWorkloadPodYaml,
   computeInitDataMrConfigId,
@@ -146,5 +148,82 @@ describe('buildWorkloadPodYaml', () => {
     expect(y).not.toContain('# KBS endpoint:');
     expect(y).toContain('runtimeClassName: kata-cc');
     expect(y).toContain('name: my-confidential-workload');
+  });
+
+  it('carries a simple, clearly editable container example and apply instructions', () => {
+    const y = buildWorkloadPodYaml({ annotation: 'X' });
+    // A runnable example container (not a bare placeholder), marked as
+    // replaceable, plus explicit replace/apply guidance.
+    expect(y).toContain('image: quay.io/kata-containers/alpine-bash-curl:latest');
+    expect(y).toContain(
+      "command: ['sh', '-c', 'echo confidential workload started; sleep infinity']",
+    );
+    expect(y).toContain('Replace the pod name,');
+    expect(y).toContain('image, and command with your workload');
+    expect(y).toContain('oc apply -f <this-file>.yaml');
+    // The annotation and runtime class are the parts that must NOT be edited.
+    expect(y).toContain('keep the annotation and');
+  });
+
+  it('embeds the exact generated annotation and measurement from buildInitdata', async () => {
+    // The downloaded/previewed Pod must carry byte-for-byte the annotation the
+    // initdata builder produced (and whose measurement got registered) — a
+    // regenerated or truncated annotation would fail attestation.
+    const result = await buildInitdata(base);
+    const y = buildWorkloadPodYaml({
+      annotation: result.annotation,
+      measurement: result.measurement,
+      platform: result.platform,
+    });
+    expect(y).toContain(`io.katacontainers.config.hypervisor.cc_init_data: "${result.annotation}"`);
+    expect(y).toContain(`#   ${result.measurement}`);
+    // And the annotation really is the gzip+base64 of the generated initdata.
+    const { gunzipSync } = await import('node:zlib');
+    expect(gunzipSync(Buffer.from(result.annotation, 'base64')).toString()).toBe(result.toml);
+  });
+});
+
+describe('applyRequestToggle', () => {
+  const off = {
+    ExecProcessRequest: false,
+    ReadStreamRequest: false,
+    WriteStreamRequest: false,
+  };
+
+  it('enabling exec also enables WriteStreamRequest so its output is visible', () => {
+    // The fetched secret printed with `oc exec … cat …` reaches the user only
+    // through the stream write — exec alone runs blind.
+    expect(applyRequestToggle(off, 'ExecProcessRequest', true)).toEqual({
+      ExecProcessRequest: true,
+      ReadStreamRequest: false,
+      WriteStreamRequest: true,
+    });
+  });
+
+  it('disabling exec leaves WriteStreamRequest exactly as the user set it', () => {
+    const withStreams = { ...off, WriteStreamRequest: true };
+    expect(applyRequestToggle(withStreams, 'ExecProcessRequest', false)).toEqual({
+      ExecProcessRequest: false,
+      ReadStreamRequest: false,
+      WriteStreamRequest: true,
+    });
+    expect(applyRequestToggle(off, 'ExecProcessRequest', false).WriteStreamRequest).toBe(false);
+  });
+
+  it('toggling WriteStreamRequest directly works without side effects', () => {
+    expect(applyRequestToggle(off, 'WriteStreamRequest', true)).toEqual({
+      ExecProcessRequest: false,
+      ReadStreamRequest: false,
+      WriteStreamRequest: true,
+    });
+  });
+
+  it('the coupled pair reaches the generated policy Rego', () => {
+    // End to end: what the UI state becomes after enabling exec must render as
+    // allowed requests in the initdata the workload measures.
+    const allow = applyRequestToggle(off, 'ExecProcessRequest', true);
+    const toml = buildInitdataToml({ ...base, policyOverrides: allow });
+    expect(toml).toContain('default ExecProcessRequest := true');
+    expect(toml).toContain('default WriteStreamRequest := true');
   });
 });
