@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { i18nStaticKeys } from './i18nKeys';
 import { deploymentRemediation } from './healthRemediation';
-import { regoWarning } from './rego';
+import { regoWarning, resourcePolicyWarning, PERMISSIVE_RESOURCE_POLICY } from './rego';
 import type { DeploymentKind, PodKind } from '../k8s/types';
 
 const catalog: Record<string, string> = JSON.parse(
@@ -65,6 +65,12 @@ describe('i18nStaticKeys', () => {
 
   it('enumerates the regoWarning message', () => {
     const message = regoWarning('package policy\nallow := true');
+    expect(message).toBeDefined();
+    expect(keys).toContain(message);
+  });
+
+  it('enumerates the resourcePolicyWarning profile-mismatch message', () => {
+    const message = resourcePolicyWarning('Restricted')(PERMISSIVE_RESOURCE_POLICY);
     expect(message).toBeDefined();
     expect(keys).toContain(message);
   });

@@ -56,7 +56,6 @@ import {
 } from '../../k8s/resources';
 import type { ConfigMapKind, DeploymentKind, RouteKind, SecretKind } from '../../k8s/types';
 import {
-  applyRequestToggle,
   buildInitdata,
   buildWorkloadPodYaml,
   MEASUREMENT_PLATFORMS,
@@ -233,11 +232,18 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
   }, [platform, refvalTouched]);
 
   const requestHelp: Record<SensitiveRequest, string> = {
-    ExecProcessRequest: t('Allow oc/kubectl exec into the confidential VM (recommended off).'),
+    ExecProcessRequest: t(
+      'Debugging only. Allow oc/kubectl exec to run a command inside the confidential VM. Off by default.',
+    ),
+    ReadStreamRequest: t(
+      'Debugging only. Allow reading a command’s stdout/stderr — needed to actually SEE exec output (e.g. a fetched secret printed with oc exec … cat …). Enable alongside exec. Off by default.',
+    ),
     WriteStreamRequest: t(
-      'Shows exec output from the confidential VM — e.g. the fetched secret printed with oc exec. Turned on automatically when exec is allowed.',
+      'Debugging only. Allow sending stdin to a process — needed only for an interactive exec session. Leave off unless you need interactive input. Off by default.',
     ),
   };
+
+  const debugRequestsEnabled = SENSITIVE_REQUESTS.some((req) => allow[req]);
 
   const generate = async () => {
     setBusy(true);
@@ -716,7 +722,7 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                   </FormHelperText>
                 </FormGroup>
 
-                <FormGroup label={t('Kata Agent policy')} fieldId="id-policy">
+                <FormGroup label={t('Kata Agent policy (debugging)')} fieldId="id-policy">
                   {SENSITIVE_REQUESTS.map((req) => (
                     <Checkbox
                       key={req}
@@ -725,11 +731,25 @@ const TrusteeInitdataTab: FC<TrusteeTabProps> = ({ obj }) => {
                       description={requestHelp[req]}
                       isChecked={allow[req]}
                       onChange={(_e, checked) => {
-                        setAllow((prev) => applyRequestToggle(prev, req, checked));
+                        // Each permission is independent — toggling one never
+                        // silently enables another.
+                        setAllow((prev) => ({ ...prev, [req]: checked }));
                       }}
                       className={`${PREFIX}__mb`}
                     />
                   ))}
+                  {debugRequestsEnabled && (
+                    <Alert
+                      variant="warning"
+                      isInline
+                      isPlain
+                      title={t('Debugging permissions can expose confidential data')}
+                    >
+                      {t(
+                        'Allowing process execution and output streaming lets anyone with exec access run commands inside the confidential VM and read their output — including secrets the workload fetched. Enable these only for troubleshooting in a non-production environment, and turn them off again afterwards. The defaults (all off) keep the workload locked down.',
+                      )}
+                    </Alert>
+                  )}
                 </FormGroup>
 
                 <Button

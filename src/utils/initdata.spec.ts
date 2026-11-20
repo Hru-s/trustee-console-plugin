@@ -7,13 +7,13 @@
  * no DOM needed.
  */
 import {
-  applyRequestToggle,
   buildInitdata,
   buildInitdataToml,
   buildWorkloadPodYaml,
   computeInitDataMrConfigId,
   computeMeasurement,
   computePcr8,
+  SENSITIVE_REQUESTS,
   type InitdataInput,
 } from './initdata';
 
@@ -183,47 +183,69 @@ describe('buildWorkloadPodYaml', () => {
   });
 });
 
-describe('applyRequestToggle', () => {
-  const off = {
-    ExecProcessRequest: false,
-    ReadStreamRequest: false,
-    WriteStreamRequest: false,
+describe('Kata Agent debugging permissions', () => {
+  // Pull the rendered `default <Request> := <bool>` out of the policy.rego the
+  // initdata carries, so assertions target the generated permission directly.
+  const renderedPermission = (toml: string, req: string): boolean | undefined => {
+    const m = new RegExp(`default ${req} := (true|false)`).exec(toml);
+    return m ? m[1] === 'true' : undefined;
   };
 
-  it('enabling exec also enables WriteStreamRequest so its output is visible', () => {
-    // The fetched secret printed with `oc exec … cat …` reaches the user only
-    // through the stream write — exec alone runs blind.
-    expect(applyRequestToggle(off, 'ExecProcessRequest', true)).toEqual({
-      ExecProcessRequest: true,
-      ReadStreamRequest: false,
-      WriteStreamRequest: true,
-    });
+  it('surfaces exactly the three independent debugging toggles', () => {
+    expect([...SENSITIVE_REQUESTS]).toEqual([
+      'ExecProcessRequest',
+      'ReadStreamRequest',
+      'WriteStreamRequest',
+    ]);
   });
 
-  it('disabling exec leaves WriteStreamRequest exactly as the user set it', () => {
-    const withStreams = { ...off, WriteStreamRequest: true };
-    expect(applyRequestToggle(withStreams, 'ExecProcessRequest', false)).toEqual({
-      ExecProcessRequest: false,
-      ReadStreamRequest: false,
-      WriteStreamRequest: true,
-    });
-    expect(applyRequestToggle(off, 'ExecProcessRequest', false).WriteStreamRequest).toBe(false);
+  it('production defaults (no overrides) leave all three disabled', () => {
+    const toml = buildInitdataToml({ ...base, policyOverrides: {} });
+    for (const req of SENSITIVE_REQUESTS) {
+      expect(renderedPermission(toml, req)).toBe(false);
+    }
   });
 
-  it('toggling WriteStreamRequest directly works without side effects', () => {
-    expect(applyRequestToggle(off, 'WriteStreamRequest', true)).toEqual({
-      ExecProcessRequest: false,
-      ReadStreamRequest: false,
-      WriteStreamRequest: true,
+  it('enabling exec + read for debugging renders exactly those, WriteStream stays off', () => {
+    // ReadStreamRequest — not WriteStreamRequest — is what makes exec output
+    // (e.g. a fetched secret) visible.
+    const toml = buildInitdataToml({
+      ...base,
+      policyOverrides: { ExecProcessRequest: true, ReadStreamRequest: true },
     });
+    expect(renderedPermission(toml, 'ExecProcessRequest')).toBe(true);
+    expect(renderedPermission(toml, 'ReadStreamRequest')).toBe(true);
+    expect(renderedPermission(toml, 'WriteStreamRequest')).toBe(false);
   });
 
-  it('the coupled pair reaches the generated policy Rego', () => {
-    // End to end: what the UI state becomes after enabling exec must render as
-    // allowed requests in the initdata the workload measures.
-    const allow = applyRequestToggle(off, 'ExecProcessRequest', true);
-    const toml = buildInitdataToml({ ...base, policyOverrides: allow });
-    expect(toml).toContain('default ExecProcessRequest := true');
-    expect(toml).toContain('default WriteStreamRequest := true');
+  it('read and write stream permissions are independent of each other', () => {
+    const readOnly = buildInitdataToml({ ...base, policyOverrides: { ReadStreamRequest: true } });
+    expect(renderedPermission(readOnly, 'ReadStreamRequest')).toBe(true);
+    expect(renderedPermission(readOnly, 'WriteStreamRequest')).toBe(false);
+
+    const writeOnly = buildInitdataToml({ ...base, policyOverrides: { WriteStreamRequest: true } });
+    expect(renderedPermission(writeOnly, 'WriteStreamRequest')).toBe(true);
+    expect(renderedPermission(writeOnly, 'ReadStreamRequest')).toBe(false);
+  });
+
+  it('enabling exec does NOT silently enable any stream permission', () => {
+    const toml = buildInitdataToml({ ...base, policyOverrides: { ExecProcessRequest: true } });
+    expect(renderedPermission(toml, 'ExecProcessRequest')).toBe(true);
+    expect(renderedPermission(toml, 'ReadStreamRequest')).toBe(false);
+    expect(renderedPermission(toml, 'WriteStreamRequest')).toBe(false);
+  });
+
+  it('disabling debugging again restores the restrictive defaults', () => {
+    const toml = buildInitdataToml({
+      ...base,
+      policyOverrides: {
+        ExecProcessRequest: false,
+        ReadStreamRequest: false,
+        WriteStreamRequest: false,
+      },
+    });
+    for (const req of SENSITIVE_REQUESTS) {
+      expect(renderedPermission(toml, req)).toBe(false);
+    }
   });
 });

@@ -101,6 +101,21 @@ export const detectClusterTee = (nodes: NodeKind[]): 'tdx' | 'snp' | null => {
 // NFD's cpuid feature-source label prefix: feature.node.kubernetes.io/cpu-cpuid.<FLAG>.
 const NFD_CPUID_PREFIX = 'feature.node.kubernetes.io/cpu-cpuid.';
 
+/** Result of deriving the default XFAM from NFD cpuid labels. */
+export interface NodeXfamDetection {
+  /** XFAM feature list (undefined when no node publishes cpuid labels). */
+  xfam?: string;
+  /**
+   * NFD published at least one extended-feature label (AVX512F or an AMX
+   * variant). False means NFD never reported AVX-512/AMX either way — some
+   * NFD configurations omit those labels from the cpuid allow-list even on
+   * hardware that has them — so the value can under-represent the node and
+   * must be presented as a fallback to verify, never as a hardware-verified
+   * default.
+   */
+  extendedFeaturesObserved: boolean;
+}
+
 /**
  * Default TEE XFAM features for the reference-value generator, derived from the
  * first node that publishes NFD cpuid labels. veritas's XFAM feature names do
@@ -108,9 +123,9 @@ const NFD_CPUID_PREFIX = 'feature.node.kubernetes.io/cpu-cpuid.';
  * the two XTILE bits, pkru = the PKU state bit), so map by family; x87/sse/avx
  * are baseline on any TDX-capable x86. A wrong XFAM makes the generated
  * reference values mismatch the hardware's actual attributes — the policy's
- * xfam check then denies every attestation. Returns undefined when no node
- * publishes cpuid labels (NFD absent or a non-x86 cluster) so callers fall
- * back to their own conservative default.
+ * xfam check then denies every attestation. Returns xfam undefined when no
+ * node publishes cpuid labels (NFD absent or a non-x86 cluster) so callers
+ * fall back to their own conservative default.
  *
  * Two live-verified NFD quirks (Sapphire Rapids TDX node, OCP 4.22):
  * - NFD strips the underscores /proc/cpuinfo uses: `amx_tile` is published as
@@ -120,8 +135,13 @@ const NFD_CPUID_PREFIX = 'feature.node.kubernetes.io/cpu-cpuid.';
  *   (Ice Lake-SP and newer) also carries PKU in XCR0, so pkru is inferred
  *   from AVX512F when the explicit label is missing; omitting it silently
  *   denies every attestation on current TDX hardware.
+ *
+ * A third quirk (Granite Rapids TDX node, live-verified): NFD's cpuid
+ * allow-list can omit AVX512F/AMX entirely (publishing only AVX/AVX2/AVXVNNI),
+ * so `extendedFeaturesObserved: false` must make consumers treat the value as
+ * an unverified fallback rather than a reading of the hardware.
  */
-export const detectNodeXfam = (nodes: NodeKind[]): string | undefined => {
+export const detectNodeXfam = (nodes: NodeKind[]): NodeXfamDetection => {
   for (const node of nodes) {
     const flags = Object.keys(node?.metadata?.labels ?? {})
       .filter((l) => l.startsWith(NFD_CPUID_PREFIX))
@@ -133,12 +153,11 @@ export const detectNodeXfam = (nodes: NodeKind[]): string | undefined => {
     const avx512 = has('AVX512F');
     if (avx512) features.push('avx512');
     if (has('PKU', 'OSPKE') || avx512) features.push('pkru');
-    if (has('AMXTILE', 'AMX_TILE', 'AMXINT8', 'AMX_INT8', 'AMXBF16', 'AMX_BF16', 'AMXFP8')) {
-      features.push('amx');
-    }
-    return features.join(',');
+    const amx = has('AMXTILE', 'AMX_TILE', 'AMXINT8', 'AMX_INT8', 'AMXBF16', 'AMX_BF16', 'AMXFP8');
+    if (amx) features.push('amx');
+    return { xfam: features.join(','), extendedFeaturesObserved: avx512 || amx };
   }
-  return undefined;
+  return { extendedFeaturesObserved: false };
 };
 
 export const teeShort = (tee: TeeType): string =>

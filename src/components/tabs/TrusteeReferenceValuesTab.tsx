@@ -60,9 +60,12 @@ const TrusteeReferenceValuesTab: FC<TrusteeTabProps> = ({ obj }) => {
   const tee: Tee = teeOverride ?? detectedTee ?? 'tdx';
 
   // Same idea for the generator's XFAM default: derive it from the node's NFD
-  // cpuid labels so it matches the hardware instead of a hardcoded guess (the
-  // user can still edit the field in the modal).
-  const detectedXfam = useMemo(() => detectNodeXfam(nodes ?? []), [nodes]);
+  // cpuid labels instead of a hardcoded guess (the user can still edit the
+  // field in the modal). NFD may omit the AVX-512/AMX labels entirely, so the
+  // detection also reports whether it actually observed extended features —
+  // without them the value is a fallback the modal must flag for verification,
+  // not a verified reading of the hardware.
+  const xfamDetection = useMemo(() => detectNodeXfam(nodes ?? []), [nodes]);
 
   // veritas generates BARE-METAL host measurements — meaningless for cloud peer pods,
   // whose reference value is the initdata PCR 8 (registered from the Initdata tab). Detect
@@ -104,7 +107,8 @@ const TrusteeReferenceValuesTab: FC<TrusteeTabProps> = ({ obj }) => {
           namespace={namespace}
           tee={tee}
           defaultOcpVersion={ocpVersion}
-          defaultXfam={detectedXfam}
+          defaultXfam={xfamDetection.xfam}
+          defaultXfamVerified={xfamDetection.extendedFeaturesObserved}
           onClose={() => {
             setModalOpen(false);
           }}

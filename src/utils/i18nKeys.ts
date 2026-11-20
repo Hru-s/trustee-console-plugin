@@ -41,9 +41,12 @@ export const i18nStaticKeys = (t: (key: string) => string): string[] => [
     'Some replicas are not ready. Check pod events for scheduling constraints, resource limits, or node affinity issues.',
   ),
   t('The Deployment is not fully available. Check pod status and events for details.'),
-  // src/utils/rego.ts — regoWarning() message, rendered by ConfigMapEditor as
-  // t(warningText).
+  // src/utils/rego.ts — regoWarning() / resourcePolicyWarning() messages,
+  // rendered by ConfigMapEditor as t(warningText).
   t(
     'No "default allow" rule found. Without it, Trustee silently denies every request. Add "default allow = true" (permissive) or "default allow = false" (restrictive) to set the baseline.',
+  ),
+  t(
+    'This resource policy allows every attested client (default allow = true), but the TrusteeConfig profile is Restricted. Saving it weakens attestation to permissive while spec.profileType still says Restricted — change the profile too if this is intended.',
   ),
 ];

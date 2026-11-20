@@ -37,6 +37,7 @@ import {
   JobModel,
   RoleBindingModel,
   RoleModel,
+  RVPS_REFERENCE_VALUES_SUFFIX,
   SecretGVK,
   SecretModel,
   ServiceAccountModel,
@@ -55,6 +56,13 @@ interface Props {
   defaultOcpVersion?: string;
   /** XFAM features detected from the node's NFD cpuid labels, when available. */
   defaultXfam?: string;
+  /**
+   * Whether the detection actually observed extended-feature labels
+   * (AVX512F/AMX). Without them NFD may simply not publish those labels, so
+   * the default can under-represent the hardware and must be flagged as a
+   * fallback to verify — never presented as a verified reading.
+   */
+  defaultXfamVerified?: boolean;
   onClose: () => void;
 }
 
@@ -121,6 +129,7 @@ const GenerateReferenceValuesModal: FC<Props> = ({
   tee,
   defaultOcpVersion,
   defaultXfam,
+  defaultXfamVerified,
   onClose,
 }) => {
   const { t } = useTranslation('plugin__trustee-openshift-console-plugin');
@@ -129,6 +138,12 @@ const GenerateReferenceValuesModal: FC<Props> = ({
   const [initdata, setInitdata] = useState('');
   const [gpu, setGpu] = useState(false);
   const [xfam, setXfam] = useState(defaultXfam ?? 'x87,sse,avx');
+  // The pre-filled XFAM is only a verified reading when NFD actually observed
+  // extended-feature labels; otherwise it is a fallback that may under-represent
+  // the hardware. The warning applies while the field still holds that default —
+  // once the user supplies their own value, provenance of the default is moot.
+  const xfamDefault = defaultXfam ?? 'x87,sse,avx';
+  const xfamUnverified = !defaultXfamVerified && xfam === xfamDefault;
   const { allowed: canCreateJob, loading: rbacLoading } = useCanCreateJob(namespace);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -138,7 +153,10 @@ const GenerateReferenceValuesModal: FC<Props> = ({
   // path below so the two can never drift apart.
   const names = generationResourceNames(trusteeConfigName);
   const P = names.prefix;
-  const rvpsConfigMap = `${trusteeConfigName}-rvps-reference-values`;
+  // Use the shared constant (not a hardcoded suffix) so the automated write can
+  // never drift from the operator-managed ConfigMap name the rest of the plugin
+  // reads/writes.
+  const rvpsConfigMap = `${trusteeConfigName}${RVPS_REFERENCE_VALUES_SUFFIX}`;
 
   // Pre-check: the Job mounts a copy of the cluster pull secret to pull the OCP
   // release image. On RBAC-restricted clusters that secret isn't readable and the
@@ -515,10 +533,14 @@ const GenerateReferenceValuesModal: FC<Props> = ({
             />
             <FormHelperText>
               <HelperText>
-                <HelperTextItem>
-                  {t(
-                    'Comma-separated TEE XFAM features to allow. veritas warns that without these the default attestation policy’s xfam check fails. Edit to match your hardware.',
-                  )}
+                <HelperTextItem variant={xfamUnverified ? 'warning' : 'default'}>
+                  {xfamUnverified
+                    ? t(
+                        'This is a fallback, not a verified reading of the node: its NFD labels do not report AVX-512 or AMX features, which TDX servers commonly have (avx512, pkru, amx). Verify against the node — for example with lscpu on the host — and edit before generating. A wrong XFAM makes the default attestation policy’s xfam check reject valid workloads.',
+                      )
+                    : t(
+                        'Comma-separated TEE XFAM features to allow, detected from the node’s NFD cpuid labels. veritas warns that without these the default attestation policy’s xfam check fails. Edit to match your hardware.',
+                      )}
                 </HelperTextItem>
               </HelperText>
             </FormHelperText>

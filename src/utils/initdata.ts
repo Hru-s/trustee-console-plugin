@@ -129,34 +129,26 @@ export const POLICY_DEFAULTS: readonly (readonly [string, boolean])[] = [
 export type SensitiveRequest = string;
 
 /**
- * The policy toggles we surface in the UI. The doc-critical control is disabling
- * `ExecProcessRequest` (no `oc exec` into the confidential VM). `WriteStreamRequest`
- * is surfaced because it rides along with exec — see {@link applyRequestToggle}.
- * Everything else keeps its secure POLICY_DEFAULTS value; in particular
- * PullImageRequest stays true (disabling it breaks the container) and
- * SetPolicyRequest stays false — we don't expose footgun toggles that only invite
- * reference-value mismatches.
+ * The debugging policy toggles we surface in the UI, each INDEPENDENT and OFF by
+ * default (see POLICY_DEFAULTS). These are development/debugging aids, not a
+ * production default:
+ *   * `ExecProcessRequest` — allow `oc exec` into the confidential VM.
+ *   * `ReadStreamRequest` — allow reading a process's stdout/stderr, i.e. actually
+ *     SEEING the output of an exec'd command (e.g. the fetched secret). This is the
+ *     permission the reviewer's "print the fetched secret" goal needs — NOT
+ *     WriteStreamRequest.
+ *   * `WriteStreamRequest` — allow sending stdin to a process. Only needed for an
+ *     interactive session; kept separate and off unless explicitly wanted.
+ * Enabling one never silently enables another. Everything else keeps its secure
+ * POLICY_DEFAULTS value; in particular PullImageRequest stays true (disabling it
+ * breaks the container) and SetPolicyRequest stays false — we don't expose footgun
+ * toggles that only invite reference-value mismatches.
  */
-export const SENSITIVE_REQUESTS = ['ExecProcessRequest', 'WriteStreamRequest'] as const;
-
-/**
- * Apply a Kata-agent policy toggle with the one coupling the UI exposes: allowing
- * `ExecProcessRequest` also allows `WriteStreamRequest`, because exec is how users
- * inspect the fetched secret inside the confidential VM (`oc exec … cat …`) and its
- * output reaches them only through the stream write. Unchecking exec leaves the
- * follower exactly as the user set it.
- */
-export const applyRequestToggle = (
-  current: Record<SensitiveRequest, boolean>,
-  req: SensitiveRequest,
-  checked: boolean,
-): Record<SensitiveRequest, boolean> => {
-  const next = { ...current, [req]: checked };
-  if (req === 'ExecProcessRequest' && checked) {
-    next.WriteStreamRequest = true;
-  }
-  return next;
-};
+export const SENSITIVE_REQUESTS = [
+  'ExecProcessRequest',
+  'ReadStreamRequest',
+  'WriteStreamRequest',
+] as const;
 
 export interface InitdataInput {
   trusteeUrl: string;

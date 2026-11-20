@@ -902,10 +902,10 @@ const DeployTrusteeWizard: FC = () => {
                         <HelperTextItem>
                           {restricted
                             ? t(
-                                'Restricted enforces strict attestation policies and requires TLS — use it for production.',
+                                'Restricted generates a strict resource policy (secrets released only to an affirming EAR result), requires TLS, and verifies the attestation token — use it for production. It does not change the CPU/GPU attestation policies, which use the same defaults for either profile.',
                               )
                             : t(
-                                'Permissive accepts most attestation evidence — good for getting started in dev and test.',
+                                'Permissive generates a resource policy that releases secrets to any attested client — good for getting started in dev and test. It uses the same CPU/GPU attestation policies as Restricted.',
                               )}
                         </HelperTextItem>
                       </HelperText>
